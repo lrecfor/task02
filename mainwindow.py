@@ -1,9 +1,10 @@
 from PyQt6.QtWidgets import *
-from PyQt6 import QtCore
-from PyQt6.QtWidgets import QMainWindow, QWidget, QLabel, QVBoxLayout, \
-    QHBoxLayout, QGridLayout, QPushButton, QScrollArea, QLineEdit, QTextEdit
+from PyQt6 import QtCore, QtGui
+from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, \
+    QHBoxLayout, QComboBox, QPushButton, QScrollArea, QLineEdit, QTextEdit
 from PyQt6.QtCore import Qt, QEvent, QPoint, QPointF, QCoreApplication
-from PyQt6.QtGui import QMouseEvent, QPointingDevice
+from PyQt6.QtGui import QMouseEvent, QPointingDevice, QShortcut, QKeySequence
+from utils import HostNotSpecifiedException, ScanTypeNotSpecifiedException
 
 
 class MainWindow(QMainWindow):
@@ -13,13 +14,17 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.host_edit = QLineEdit(self)
-        self.scan_type_edit = QLineEdit(self)
+        self.scan_type_edit = QComboBox(self)
         self.submit_button = QPushButton("Submit", self)
         self.output_edit = QTextEdit(self)
 
         self.submit_button.clicked.connect(self.start_scan)
+        self.host_edit.returnPressed.connect(self.submit_button.click)
+        shortcut = QShortcut(QKeySequence(Qt.Key.Key_Return), self)
+        shortcut.activated.connect(self.submit_button.click)
+
         self.host_edit.setPlaceholderText("Enter host")
-        self.scan_type_edit.setPlaceholderText("Enter scan type")
+        self.scan_type_edit.addItems(["TCP", "UDP"])
         self.output_edit.setReadOnly(True)
         self.output_edit.setPlaceholderText("Output")
         self.output_edit.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
@@ -43,4 +48,15 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(self.output_edit)
 
     def start_scan(self):
-        self.output_edit.print("hello, world")
+        try:
+            host = self.host_edit.text()
+            if host == "":
+                raise HostNotSpecifiedException()
+            scan_type = self.scan_type_edit.currentText()
+        except HostNotSpecifiedException:
+            self.output_result("Host is not specified")
+            return
+        self.output_result(str(host + '\n' + scan_type))
+
+    def output_result(self, text):
+        self.output_edit.setText(text)
