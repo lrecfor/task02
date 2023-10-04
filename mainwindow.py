@@ -1,10 +1,12 @@
-from PyQt6.QtWidgets import *
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, \
-    QHBoxLayout, QComboBox, QPushButton, QScrollArea, QLineEdit, QTextEdit
-from PyQt6.QtCore import Qt, QEvent, QPoint, QPointF, QCoreApplication
-from PyQt6.QtGui import QMouseEvent, QPointingDevice, QShortcut, QKeySequence
-from utils import HostNotSpecifiedException, ScanTypeNotSpecifiedException
+    QHBoxLayout, QComboBox, QPushButton, QLineEdit, QTextEdit
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QShortcut, QKeySequence
+from utils import HostNotSpecifiedException, ScanErrorException
+import scanner
+import database as db
+from database import Scan
 
 
 class MainWindow(QMainWindow):
@@ -56,7 +58,19 @@ class MainWindow(QMainWindow):
         except HostNotSpecifiedException:
             self.output_result("Host is not specified")
             return
-        self.output_result(str(host + '\n' + scan_type))
+        self.output_result(str(host + '\n' + scan_type))  ##
+
+        ports = None
+        try:
+            if scan_type == "TCP":
+                ports = scanner.tcp_scan(host)
+            elif scan_type == "UDP":
+                ports = scanner.udp_scan(host)
+            elif scan_type == "FIN":
+                ports = scanner.fin_scan(host)
+        except ScanErrorException as e:
+            self.output_result(ports)
+            # db.add(Scan(host=host, ports=ports))
 
     def output_result(self, text):
         self.output_edit.setText(text)
