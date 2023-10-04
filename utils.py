@@ -3,6 +3,6 @@ class HostNotSpecifiedException(Exception):
     pass
 
 
-class ScanTypeNotSpecifiedException(Exception):
-    # class for exceptions when scan type is not specified
+class ScanErrorException(Exception):
+    # class for exceptions when scan fails
     pass
