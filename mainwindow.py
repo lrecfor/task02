@@ -26,7 +26,7 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.submit_button.click)
 
         self.host_edit.setPlaceholderText("Enter host")
-        self.scan_type_edit.addItems(["TCP", "UDP"])
+        self.scan_type_edit.addItems(["TCP", "UDP", "FIN", "SYN"])
         self.output_edit.setReadOnly(True)
         self.output_edit.setPlaceholderText("Output")
         self.output_edit.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
@@ -58,7 +58,6 @@ class MainWindow(QMainWindow):
         except HostNotSpecifiedException:
             self.output_result("Host is not specified")
             return
-        self.output_result(str(host + '\n' + scan_type))  ##
 
         ports = None
         try:
@@ -68,8 +67,12 @@ class MainWindow(QMainWindow):
                 ports = scanner.udp_scan(host)
             elif scan_type == "FIN":
                 ports = scanner.fin_scan(host)
-        except ScanErrorException as e:
+            elif scan_type == "SYN":
+                ports = scanner.syn_scan(host)
             self.output_result(ports)
+            # db.add(Scan(host=host, ports=ports))
+        except ScanErrorException as e:
+            self.output_result("Error occurred")
             # db.add(Scan(host=host, ports=ports))
 
     def output_result(self, text):
