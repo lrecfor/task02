@@ -16,7 +16,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.host_edit = QLineEdit(self)
-        self.scan_type_edit = QComboBox(self)
+        self.scan_type_cb = QComboBox(self)
         self.submit_button = QPushButton("Submit", self)
         self.output_edit = QTextEdit(self)
 
@@ -26,12 +26,19 @@ class MainWindow(QMainWindow):
         shortcut.activated.connect(self.submit_button.click)
 
         self.host_edit.setPlaceholderText("Enter host")
-        self.scan_type_edit.addItems(["TCP", "UDP", "FIN", "SYN"])
+        self.scan_type_cb.addItems(["TCP", "UDP", "FIN", "SYN"])
         self.output_edit.setReadOnly(True)
         self.output_edit.setPlaceholderText("Output")
         self.output_edit.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self.output_edit.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self.output_edit.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+
+        font = QtGui.QFont()
+        font.setPointSize(14)
+        self.output_edit.setFont(font)
+        self.host_edit.setFont(font)
+        self.submit_button.setFont(font)
+        self.scan_type_cb.setFont(font)
 
         self.window = QWidget()
         self.layout = QHBoxLayout(self.window)
@@ -43,7 +50,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.window)
 
         self.left.addWidget(self.host_edit)
-        self.left.addWidget(self.scan_type_edit)
+        self.left.addWidget(self.scan_type_cb)
         self.left.addWidget(self.submit_button)
 
         self.layout.addLayout(self.left)
@@ -54,7 +61,7 @@ class MainWindow(QMainWindow):
             host = self.host_edit.text()
             if host == "":
                 raise HostNotSpecifiedException()
-            scan_type = self.scan_type_edit.currentText()
+            scan_type = self.scan_type_cb.currentText()
         except HostNotSpecifiedException:
             self.output_result("Host is not specified")
             return
@@ -69,7 +76,8 @@ class MainWindow(QMainWindow):
                 ports = scanner.fin_scan(host)
             elif scan_type == "SYN":
                 ports = scanner.syn_scan(host)
-            self.output_result(ports)
+
+            self.output_result("PORT\t\tSTATUS\n" + ports)
             # db.add(Scan(host=host, ports=ports))
         except ScanErrorException as e:
             self.output_result("Error occurred")
