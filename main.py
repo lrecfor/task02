@@ -1,12 +1,10 @@
-from PyQt6.QtWidgets import QApplication
+import gi
 from mainwindow import MainWindow
-import sys
 
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk
 
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    main_window = MainWindow()
-    main_window.show()
-    main_window.setWindowTitle("Scanner")
-    main_window.showMaximized()
-    sys.exit(app.exec())
+if __name__ == "__main__":
+    Gtk.init()
+    MainWindow()
+    Gtk.main()

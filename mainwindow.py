@@ -1,87 +1,106 @@
-from PyQt6 import QtCore, QtGui
-from PyQt6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, \
-    QHBoxLayout, QComboBox, QPushButton, QLineEdit, QTextEdit
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QShortcut, QKeySequence
-from utils import HostNotSpecifiedException, ScanErrorException
-import scanner
-import database as db
-from database import Scan
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, GObject
 
-
-class MainWindow(QMainWindow):
+class MainWindow:
     def __init__(self):
-        QMainWindow.__init__(self, parent=None)
+        self.window = Gtk.Window(title="Scanner")
+        self.window.connect("delete-event", Gtk.main_quit)
+        self.window.set_default_size(800, 400)
 
-        super().__init__()
+        self.host_edit = Gtk.Entry()
+        self.scan_type_combo = Gtk.ComboBoxText()
 
-        self.host_edit = QLineEdit(self)
-        self.scan_type_cb = QComboBox(self)
-        self.submit_button = QPushButton("Submit", self)
-        self.output_edit = QTextEdit(self)
+        items = ["TCP", "UDP", "FIN", "SYN"]
+        for item in items:
+            self.scan_type_combo.append_text(item)
 
-        self.submit_button.clicked.connect(self.start_scan)
-        self.host_edit.returnPressed.connect(self.submit_button.click)
-        shortcut = QShortcut(QKeySequence(Qt.Key.Key_Return), self)
-        shortcut.activated.connect(self.submit_button.click)
+        self.scan_type_combo.set_active(0)
 
-        self.host_edit.setPlaceholderText("Enter host")
-        self.scan_type_cb.addItems(["TCP", "UDP", "FIN", "SYN"])
-        self.output_edit.setReadOnly(True)
-        self.output_edit.setPlaceholderText("Output")
-        self.output_edit.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
-        self.output_edit.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
-        self.output_edit.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        # Создаем RadioButton для выбора между "Default" и "Custom"
+        self.default_radio = Gtk.RadioButton.new_with_label_from_widget(None, "Default")
+        self.custom_radio = Gtk.RadioButton.new_with_label_from_widget(self.default_radio, "Custom")
 
-        font = QtGui.QFont()
-        font.setPointSize(14)
-        self.output_edit.setFont(font)
-        self.host_edit.setFont(font)
-        self.submit_button.setFont(font)
-        self.scan_type_cb.setFont(font)
+        self.custom_radio.connect("toggled", self.on_custom_toggled)
 
-        self.window = QWidget()
-        self.layout = QHBoxLayout(self.window)
-        self.layout.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter | QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.submit_button = Gtk.Button(label="Submit")
+        self.output_edit = Gtk.TextView()
+        self.output_edit.set_editable(False)
+        self.output_edit.set_wrap_mode(Gtk.WrapMode.NONE)
+        self.output_edit.set_cursor_visible(True)
 
-        self.left = QVBoxLayout()
-        self.left.setAlignment(QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignCenter)
+        self.submit_button.connect("clicked", self.start_scan)
 
-        self.setCentralWidget(self.window)
+        style_provider = Gtk.CssProvider()
+        style_provider.load_from_data(b"""
+            .my-font {
+                font-size: 14pt;
+            }
+        """)
 
-        self.left.addWidget(self.host_edit)
-        self.left.addWidget(self.scan_type_cb)
-        self.left.addWidget(self.submit_button)
+        context = self.output_edit.get_style_context()
+        context.add_provider(style_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
-        self.layout.addLayout(self.left)
-        self.layout.addWidget(self.output_edit)
+        self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        self.main_box.set_margin_start(8)
+        self.window.add(self.main_box)
 
-    def start_scan(self):
-        try:
-            host = self.host_edit.text()
-            if host == "":
-                raise HostNotSpecifiedException()
-            scan_type = self.scan_type_cb.currentText()
-        except HostNotSpecifiedException:
+        self.left_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.left_box.set_size_request(300, -1)
+        self.left_box.set_margin_top(8)
+        self.main_box.pack_start(self.left_box, False, True, 0)
+
+        self.left_box.pack_start(self.host_edit, False, True, 0)
+        self.left_box.pack_start(self.scan_type_combo, False, True, 0)
+
+        # Добавляем RadioButton "Default" и "Custom"
+        self.left_box.pack_start(self.default_radio, False, True, 0)
+        self.left_box.pack_start(self.custom_radio, False, True, 0)
+
+        # Создаем поле ввода только для "Custom"
+        self.username_entry = Gtk.Entry()
+        self.left_box.pack_start(self.username_entry, False, True, 0)
+        self.username_entry.set_sensitive(False)  # Изначально отключено
+
+        self.left_box.pack_start(self.submit_button, False, True, 0)
+
+        self.main_box.pack_start(self.output_edit, True, True, 0)
+        self.output_edit.set_margin_top(8)
+        self.output_edit.set_margin_end(8)
+        self.output_edit.set_margin_bottom(8)
+
+        # Создаем обработчик клавиш для приложения
+        self.accel_group = Gtk.AccelGroup()
+        self.window.add_accel_group(self.accel_group)
+        key, modifier = Gtk.accelerator_parse("Return")  # Клавиша Enter
+        self.accel_group.connect(key, modifier, Gtk.AccelFlags.VISIBLE, self.on_enter_key_pressed)
+
+        self.window.show_all()
+
+    def on_custom_toggled(self, button):
+        # Отключаем/включаем поле ввода при переключении состояния RadioButton "Custom"
+        self.username_entry.set_sensitive(button.get_active())
+
+    def start_scan(self, widget):
+        host = self.host_edit.get_text()
+        scan_type = self.scan_type_combo.get_active_text()
+        username = self.username_entry.get_text() if self.username_entry.get_sensitive() else ""  # Получаем текст из поля ввода только при включенном состоянии
+
+        if not host:
             self.output_result("Host is not specified")
             return
 
-        ports = None
-        try:
-            if scan_type == "TCP":
-                ports = scanner.tcp_scan(host)
-            elif scan_type == "UDP":
-                ports = scanner.udp_scan(host)
-            elif scan_type == "FIN":
-                ports = scanner.fin_scan(host)
-            elif scan_type == "SYN":
-                ports = scanner.syn_scan(host)
-
-            self.output_result("PORT\t\tSTATUS\n" + ports)
-            # db.add(Scan(host=host, ports=ports))
-        except ScanErrorException as e:
-            self.output_result("Error occurred")
-            # db.add(Scan(host=host, ports=ports))
+        scan_info = f"Host: {host}\nScan Type: {scan_type}\nUsername: {username}"
+        self.output_result(scan_info)
 
     def output_result(self, text):
-        self.output_edit.setText(text)
+        buffer = self.output_edit.get_buffer()
+        buffer.set_text(text)
+
+    def on_enter_key_pressed(self, *args):
+        # Вызываем нажатие кнопки "Submit" при нажатии клавиши Enter
+        self.submit_button.clicked()
+
+if __name__ == "__main__":
+    app = MainWindow()
+    Gtk.main()
