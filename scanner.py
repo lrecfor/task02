@@ -41,18 +41,14 @@ def syn_scan(host):
             packet_ = IP(dst=host_) / TCP(dport=port_, flags="S")
             response = sr1(packet_, verbose=0, timeout=0.5)
 
-            """ 
-            for display all ports status 
-            """
+            """ for display all ports status """
             # if response and response.haslayer(TCP) and response.getlayer(TCP).flags == 0x12:
             #     print(f"Порт {port_} открыт")
             #     return str('''<font color="green">Порт ''' + str(port_) + ''' открыт</font><br>''')
             # else:
             #     return str('''<font color="red">Порт ''' + str(port_) + ''' закрыт</font><br>''')
 
-            """ 
-            for display only open ports 
-            """
+            """ for display only open ports """
             if response and response.haslayer(TCP) and response.getlayer(TCP).flags == 0x12:
                 return f"{port_}\t\topen\n"
             else:
