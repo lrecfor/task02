@@ -1,63 +1,54 @@
-from scapy.layers.inet import ICMP, IP, TCP, sr1
-import socket
-import struct
-from datetime import datetime
-from utils import ScanErrorException
+from scapy.layers.inet import IP, TCP, ICMP
+from utils import ScanErrorException, default_ports
 from scapy.all import *
 from concurrent.futures import ThreadPoolExecutor
 import time
-import os
-
-with open("ports.txt", "r") as f:
-    popular_ports = f.readlines()
-for i in range(len(popular_ports)):
-    popular_ports[i] = int(popular_ports[i].replace("\n", ""))
 
 
-def tcp_scan(host):
+def tcp_scan(host, ports_):
     try:
         pass
     except Exception as e:
         raise ScanErrorException(e)
 
 
-def udp_scan(host):
+def udp_scan(host, ports_):
     try:
         pass
     except Exception as e:
         raise ScanErrorException(e)
 
 
-def fin_scan(host):
+def fin_scan(host, ports_):
     try:
         pass
     except Exception as e:
         raise ScanErrorException(e)
 
 
-def syn_scan(host):
+def syn_scan(host, ports_):
     try:
         def syn_scan_(host_, port_):
             packet_ = IP(dst=host_) / TCP(dport=port_, flags="S")
             response = sr1(packet_, verbose=0, timeout=0.5)
 
-            """ for display all ports status """
-            # if response and response.haslayer(TCP) and response.getlayer(TCP).flags == 0x12:
-            #     print(f"Порт {port_} открыт")
-            #     return str('''<font color="green">Порт ''' + str(port_) + ''' открыт</font><br>''')
-            # else:
-            #     return str('''<font color="red">Порт ''' + str(port_) + ''' закрыт</font><br>''')
+            if response is None:
+                return f"{port_:<{10}}\t\t{'filtered'}\n"
 
-            """ for display only open ports """
-            if response and response.haslayer(TCP) and response.getlayer(TCP).flags == 0x12:
-                return f"{port_}\t\topen\n"
-            else:
-                return ""
+            elif response.haslayer(TCP):
+                if response.getlayer(TCP).flags == 0x12:
+                    return f"{port_:<{10}}\t\t{'open'}\n"
+                elif response.getlayer(TCP).flags == 0x14:
+                    return ""
+            elif response.haslayer(ICMP):
+                if (int(response.getlayer(ICMP).type) == 3 and
+                        int(response.getlayer(ICMP).code) in [1, 2, 3, 9, 10, 13]):
+                    return f"{port_:<{10}}\t{'filtered'}\n"
 
         start_time = time.time()
         text_list = []
         with ThreadPoolExecutor(max_workers=15) as executor:
-            for port in popular_ports:
+            for port in ports_:
                 text_list.append(executor.submit(syn_scan_, host, port))
         end_time = time.time()
 
