@@ -28,13 +28,12 @@ class MainWindow:
         self.host_edit = Gtk.Entry()
         self.scan_type_combo = Gtk.ComboBoxText()
 
-        items = ["TCP", "UDP", "FIN", "SYN"]
+        items = ["FIN", "SYN", "ACK"]   # ["TCP", "UDP", "FIN", "SYN", "ACK"]
         for item in items:
             self.scan_type_combo.append_text(item)
 
         self.scan_type_combo.set_active(0)
 
-        # Создаем RadioButton для выбора между "Default" и "Custom"
         self.default_radio = Gtk.RadioButton.new_with_label_from_widget(None, "Default")
         self.custom_radio = Gtk.RadioButton.new_from_widget(self.default_radio)
         self.custom_radio.set_label("Custom")
@@ -77,16 +76,14 @@ class MainWindow:
         self.left_box.pack_start(Gtk.Label('Scan type:', xalign=0.0), False, True, 0)
         self.left_box.pack_start(self.scan_type_combo, False, True, 0)
 
-        # Добавляем RadioButton "Default" и "Custom"
         self.left_box.pack_start(Gtk.Label('Ports:', xalign=0.0), False, True, 0)
         self.left_box.pack_start(self.default_radio, False, True, 0)
         self.left_box.pack_start(self.custom_radio, False, True, 0)
 
-        # Создаем поле ввода только для "Custom"
         self.ports_edit = Gtk.Entry()
-        self.ports_edit.set_text(", ".join([str(i) for i in default_ports]))  # Устанавливаем изначальное значение
+        self.ports_edit.set_text(", ".join([str(i) for i in default_ports]))
         self.left_box.pack_start(self.ports_edit, False, True, 0)
-        self.ports_edit.set_sensitive(False)  # Изначально отключено
+        self.ports_edit.set_sensitive(False)
 
         self.left_box.pack_start(self.submit_button, False, True, 0)
 
@@ -95,7 +92,6 @@ class MainWindow:
         self.output_edit.set_margin_end(8)
         self.output_edit.set_margin_bottom(8)
 
-        # Создаем обработчик клавиш для приложения
         self.accel_group = Gtk.AccelGroup()
         self.window.add_accel_group(self.accel_group)
         key, modifier = Gtk.accelerator_parse("Return")
@@ -104,10 +100,8 @@ class MainWindow:
         self.window.show_all()
 
     def on_custom_toggled(self, button):
-        # Отключаем/включаем поле ввода при переключении состояния RadioButton "Custom"
         self.ports_edit.set_sensitive(button.get_active())
 
-        # Если выбран "Default", устанавливаем значение default_ports в поле ввода "Ports"
         if not button.get_active():
             self.ports_edit.set_text(", ".join([str(i) for i in default_ports]))
         else:
@@ -124,19 +118,25 @@ class MainWindow:
 
         host = host.split(', ')
         scan_type = self.scan_type_combo.get_active_text()
-        ports_ = parse_number_string(self.ports_edit.get_text()) if self.custom_radio.get_active() else "default"
+        ports_ = parse_number_string(self.ports_edit.get_text()) if self.custom_radio.get_active() else default_ports
 
         try:
-            if scan_type == "TCP":
-                ports_ = scanner.tcp_scan(host, ports_)
-            elif scan_type == "UDP":
-                ports_ = scanner.udp_scan(host, ports_)
-            elif scan_type == "FIN":
-                ports_ = scanner.fin_scan(host, ports_)
+            ports_status = ""
+            # if scan_type == "TCP":
+            #     ports_ = scanner.tcp_scan(host, ports_)
+            # elif scan_type == "UDP":
+            #     ports_ = scanner.udp_scan(host, ports_)
+            if scan_type == "FIN":
+                ports_status = scanner.fin_scan(host, ports_)
             elif scan_type == "SYN":
-                ports_ = scanner.syn_scan(host, ports_)
+                ports_status = scanner.syn_scan(host, ports_)
+            elif scan_type == "ACK":
+                ports_status = scanner.ack_scan(host, ports_)
 
-            self.output_result("PORT\t\tSTATUS\n" + ports_)
+            if ports_status == "":
+                self.output_result("All ports are filtered/closed")
+            else:
+                self.output_result("PORT\t\tSTATUS\n" + ports_status)
             # db.add(Scan(host=host, ports=ports))
         except ScanErrorException as e:
             self.output_result("Error occurred")
@@ -146,5 +146,4 @@ class MainWindow:
         buffer.set_text(text)
 
     def on_enter_key_pressed(self, *args):
-        # Вызываем нажатие кнопки "Submit" при нажатии клавиши Enter
         self.submit_button.clicked()
