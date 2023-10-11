@@ -2,7 +2,8 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject
 from utils import *
-import scanner
+from scanner import Scanner
+from concurrent.futures import ThreadPoolExecutor
 
 
 def parse_number_string(input_string):
@@ -27,8 +28,10 @@ class MainWindow:
 
         self.host_edit = Gtk.Entry()
         self.scan_type_combo = Gtk.ComboBoxText()
+        self.spinner = Gtk.Spinner()
+        self.spinner.set_size_request(24, 24)
 
-        items = ["FIN", "SYN", "ACK"]   # ["TCP", "UDP", "FIN", "SYN", "ACK"]
+        items = ["FIN", "SYN", "ACK"]
         for item in items:
             self.scan_type_combo.append_text(item)
 
@@ -58,9 +61,13 @@ class MainWindow:
         context = self.output_edit.get_style_context()
         context.add_provider(style_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
+        self.overlay = Gtk.Overlay()
+        self.overlay.add(self.output_edit)
+        self.overlay.add_overlay(self.spinner)
+
         self.output_scroll = Gtk.ScrolledWindow()
         self.output_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        self.output_scroll.add(self.output_edit)
+        self.output_scroll.add(self.overlay)
 
         self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.main_box.set_margin_start(8)
@@ -99,6 +106,8 @@ class MainWindow:
 
         self.window.show_all()
 
+        self.thread_pool = ThreadPoolExecutor(max_workers=1)
+
     def on_custom_toggled(self, button):
         self.ports_edit.set_sensitive(button.get_active())
 
@@ -113,37 +122,53 @@ class MainWindow:
             if not host:
                 raise HostNotSpecifiedException("Host is not specified")
         except HostNotSpecifiedException as e:
-            self.output_result(str(e))
+            self.output_text(str(e))
             return
 
         host = host.split(', ')
         scan_type = self.scan_type_combo.get_active_text()
+        try:
+            if self.ports_edit.get_text() == "":
+                raise CustomPortsNotSpecifiedException("Custom ports are not specified")
+        except CustomPortsNotSpecifiedException as e:
+            self.output_text(str(e))
+            return
         ports_ = parse_number_string(self.ports_edit.get_text()) if self.custom_radio.get_active() else default_ports
 
+        self.output_text("")
+        self.submit_button.set_sensitive(False)
+        self.spinner.start()
+
         try:
-            ports_status = ""
-            # if scan_type == "TCP":
-            #     ports_ = scanner.tcp_scan(host, ports_)
-            # elif scan_type == "UDP":
-            #     ports_ = scanner.udp_scan(host, ports_)
+            scanner = Scanner()
+            future = None
             if scan_type == "FIN":
-                ports_status = scanner.fin_scan(host, ports_)
+                future = self.thread_pool.submit(scanner.fin_scan, host, ports_)
             elif scan_type == "SYN":
-                ports_status = scanner.syn_scan(host, ports_)
+                future = self.thread_pool.submit(scanner.syn_scan, host, ports_)
             elif scan_type == "ACK":
-                ports_status = scanner.ack_scan(host, ports_)
+                future = self.thread_pool.submit(scanner.ack_scan, host, ports_)
 
-            if ports_status == "":
-                self.output_result("All ports are filtered/closed")
-            else:
-                self.output_result("PORT\t\tSTATUS\n" + ports_status)
             # db.add(Scan(host=host, ports=ports))
+            future.add_done_callback(self.update_window_state)
         except ScanErrorException as e:
-            self.output_result("Error occurred")
+            self.output_text("Error occurred")
 
-    def output_result(self, text):
+    def output_text(self, text):
         buffer = self.output_edit.get_buffer()
         buffer.set_text(text)
 
     def on_enter_key_pressed(self, *args):
         self.submit_button.clicked()
+
+    def update_window_state(self, future):
+        self.spinner.stop()
+        self.submit_button.set_sensitive(True)
+        try:
+            ports_status = future.result()
+            if ports_status == "":
+                self.output_text("All ports are filtered/closed")
+            else:
+                self.output_text("PORT\t\tSTATUS\n" + ports_status)
+        except ScanErrorException as e:
+            raise ScanErrorException(e)
