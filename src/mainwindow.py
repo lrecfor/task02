@@ -7,6 +7,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 def parse_number_string(input_string):
+    """
+    Parse a string of numbers separated by commas and/or hyphens.
+    For example, "1,2,3,4-5,6" will return [1, 2, 3, 4, 5, 6].
+
+    :param input_string: The string to parse.
+    :return: list of numbers of string.
+    """
     parts = input_string.split(',')
     numbers = []
 
@@ -109,6 +116,12 @@ class MainWindow:
         self.thread_pool = ThreadPoolExecutor(max_workers=1)
 
     def on_custom_toggled(self, button):
+        """
+        Handle custom ports toggling.
+
+        :param button:
+        :return:
+        """
         self.ports_edit.set_sensitive(button.get_active())
 
         if not button.get_active():
@@ -117,6 +130,12 @@ class MainWindow:
             self.ports_edit.set_text("")
 
     def start_scan(self, widget):
+        """
+        Get parameters from user and start scan
+
+        :param widget:
+        :return:
+        """
         try:
             host = self.host_edit.get_text()
             if not host:
@@ -155,13 +174,31 @@ class MainWindow:
             self.output_text("Error occurred")
 
     def output_text(self, text):
+        """
+        Output text in the output window.
+
+        :param text: text to be outputted.
+        :return:
+        """
         buffer = self.output_edit.get_buffer()
         buffer.set_text(text)
 
     def on_enter_key_pressed(self, *args):
+        """
+        Causes submit_button to be pressed when enter key is pressed.
+
+        :param args:
+        :return:
+        """
         self.submit_button.clicked()
 
     def update_window_state(self, future):
+        """
+        Update window state when scanning is complete.
+
+        :param future: future object returned by scanner.scan() method.
+        :return:
+        """
         self.spinner.stop()
         self.submit_button.set_sensitive(True)
         try:

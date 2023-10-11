@@ -9,6 +9,14 @@ class Scanner:
 
     @staticmethod
     def scan(host, ports_, func):
+        """
+        Scanning ports by execute func with ThreadPoolExecutor.
+
+        :param host: host ip or domain name to scan
+        :param ports_: list of ports to scan
+        :param func: function to execute with ThreadPoolExecutor
+        :return: list of strings with result of scanning
+        """
         try:
             start_time = time.time()
             text_list = []
@@ -23,6 +31,13 @@ class Scanner:
             raise ScanErrorException(e)
 
     def ack_scan(self, host, ports_):
+        """
+        Scan ports using ack packets by call scan() function.
+
+        :param host: host ip or domain name to scan
+        :param ports_: list of ports to scan
+        :return: list of strings with result of scanning
+        """
         try:
             def ack_scan_(host_, port_):
                 packet_ = IP(dst=host_) / TCP(dport=port_, flags="A")
@@ -48,6 +63,13 @@ class Scanner:
             raise ScanErrorException(e)
 
     def fin_scan(self, host, ports_):
+        """
+        Scan ports using fin packets by call scan() function.
+
+        :param host: host ip or domain name to scan
+        :param ports_: list of ports to scan
+        :return: list of strings with result of scanning
+        """
         try:
             def fin_scan_(host_, port_):
                 packet_ = IP(dst=host_) / TCP(dport=port_, flags="F")
@@ -70,6 +92,13 @@ class Scanner:
             raise ScanErrorException(e)
 
     def syn_scan(self, host, ports_):
+        """
+        Scan ports using syn packets by call scan() function.
+
+        :param host: host ip or domain name to scan
+        :param ports_: list of ports to scan
+        :return: list of strings with result of scanning
+        """
         try:
             def syn_scan_(host_, port_):
                 packet_ = IP(dst=host_) / TCP(dport=port_, flags="S")
