@@ -1,9 +1,11 @@
 import gi
+
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject
 from utils import *
 from scanner import Scanner
 from concurrent.futures import ThreadPoolExecutor
+import database as db
 
 
 def parse_number_string(input_string):
@@ -29,6 +31,7 @@ def parse_number_string(input_string):
 
 class MainWindow:
     def __init__(self):
+        self.host = None
         self.window = Gtk.Window(title="Scanner")
         self.window.connect("delete-event", Gtk.main_quit)
         self.window.set_default_size(800, 400)
@@ -137,41 +140,43 @@ class MainWindow:
         :return:
         """
         try:
-            host = self.host_edit.get_text()
-            if not host:
+            hosts = self.host_edit.get_text()
+            if not hosts:
                 raise HostNotSpecifiedException("Host is not specified")
         except HostNotSpecifiedException as e:
             self.output_text(str(e))
             return
 
-        host = host.split(', ')
-        scan_type = self.scan_type_combo.get_active_text()
-        try:
-            if self.ports_edit.get_text() == "":
-                raise CustomPortsNotSpecifiedException("Custom ports are not specified")
-        except CustomPortsNotSpecifiedException as e:
-            self.output_text(str(e))
-            return
-        ports_ = parse_number_string(self.ports_edit.get_text()) if self.custom_radio.get_active() else default_ports
+        hosts = hosts.split(', ')
+        for host in hosts:
+            self.host = host
+            scan_type = self.scan_type_combo.get_active_text()
+            try:
+                if self.ports_edit.get_text() == "":
+                    raise CustomPortsNotSpecifiedException("Custom ports are not specified")
+            except CustomPortsNotSpecifiedException as e:
+                self.output_text(str(e))
+                return
+            ports_ = parse_number_string(self.ports_edit.get_text()) if self.custom_radio.get_active() \
+                else default_ports
 
-        self.output_text("")
-        self.submit_button.set_sensitive(False)
-        self.spinner.start()
+            self.output_text("")
+            self.submit_button.set_sensitive(False)
+            self.spinner.start()
 
-        try:
-            scanner = Scanner()
-            future = None
-            if scan_type == "FIN":
-                future = self.thread_pool.submit(scanner.fin_scan, host, ports_)
-            elif scan_type == "SYN":
-                future = self.thread_pool.submit(scanner.syn_scan, host, ports_)
-            elif scan_type == "ACK":
-                future = self.thread_pool.submit(scanner.ack_scan, host, ports_)
+            try:
+                scanner = Scanner()
+                future = None
+                if scan_type == "FIN":
+                    future = self.thread_pool.submit(scanner.fin_scan, host, ports_)
+                elif scan_type == "SYN":
+                    future = self.thread_pool.submit(scanner.syn_scan, host, ports_)
+                elif scan_type == "ACK":
+                    future = self.thread_pool.submit(scanner.ack_scan, host, ports_)
 
-            # db.add(Scan(host=host, ports=ports))
-            future.add_done_callback(self.update_window_state)
-        except ScanErrorException as e:
-            self.output_text("Error occurred")
+                future.add_done_callback(self.update_window_state)
+            except ScanErrorException as e:
+                self.output_text("Error occurred")
 
     def output_text(self, text):
         """
@@ -204,8 +209,9 @@ class MainWindow:
         try:
             ports_status = future.result()
             if ports_status == "":
-                self.output_text("All ports are filtered/closed")
+                self.output_text("All 1000 scanned ports are in ignored states.")
             else:
                 self.output_text("PORT\t\tSTATUS\n" + ports_status)
+                db.insert_ports(host=self.host, ports=future.result())
         except ScanErrorException as e:
             raise ScanErrorException(e)
