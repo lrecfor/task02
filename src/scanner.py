@@ -3,9 +3,18 @@ from utils import ScanErrorException
 from scapy.all import *
 from concurrent.futures import ThreadPoolExecutor
 import time
+import socket
 
 
 class Scanner:
+
+    @staticmethod
+    def get_domain_name(ip_address):
+        try:
+            hostname = socket.gethostbyaddr(ip_address)[0]
+            return hostname
+        except socket.herror:
+            return "No domain name found"
 
     @staticmethod
     def scan(host, ports_, func):
@@ -39,12 +48,16 @@ class Scanner:
         :return: list of strings with result of scanning
         """
         try:
+            socket.inet_aton(host)
+        except socket.error:
+            host = self.get_domain_name(host)
+        try:
             def ack_scan_(host_, port_):
                 packet_ = IP(dst=host_) / TCP(dport=port_, flags="A")
                 response = sr1(packet_, verbose=0, timeout=10)
 
                 if response is None:
-                    return f"{port_:<{10}}\t\t{'filtered'}\n"
+                    return f"{port_:<{10}}\t\t{'Filtered'}\n"
 
                 elif response.haslayer(TCP):
                     if response.getlayer(TCP).flags == 0x4:
@@ -54,7 +67,7 @@ class Scanner:
                 elif response.haslayer(ICMP):
                     if (int(response.getlayer(ICMP).type) == 3 and
                             int(response.getlayer(ICMP).code) in [1, 2, 3, 9, 10, 13]):
-                        return f"{port_:<{10}}\t{'filtered'}\n"
+                        return f"{port_:<{10}}\t{'Filtered'}\n"
 
                 return ""
 
@@ -70,6 +83,10 @@ class Scanner:
         :param ports_: list of ports to scan
         :return: list of strings with result of scanning
         """
+        try:
+            socket.inet_aton(host)
+        except socket.error:
+            host = self.get_domain_name(host)
         try:
             def fin_scan_(host_, port_):
                 packet_ = IP(dst=host_) / TCP(dport=port_, flags="F")
@@ -100,12 +117,16 @@ class Scanner:
         :return: list of strings with result of scanning
         """
         try:
+            socket.inet_aton(host)
+        except socket.error:
+            host = self.get_domain_name(host)
+        try:
             def syn_scan_(host_, port_):
                 packet_ = IP(dst=host_) / TCP(dport=port_, flags="S")
                 response = sr1(packet_, verbose=0, timeout=10)
 
                 if response is None:
-                    return f"{port_:<{10}}\t\t{'filtered'}\n"
+                    return f"{port_:<{10}}\t\t{'Filtered'}\n"
 
                 elif response.haslayer(TCP):
                     if response.getlayer(TCP).flags == 0x12:
@@ -115,7 +136,7 @@ class Scanner:
                 elif response.haslayer(ICMP):
                     if (int(response.getlayer(ICMP).type) == 3 and
                             int(response.getlayer(ICMP).code) in [1, 2, 3, 9, 10, 13]):
-                        return f"{port_:<{10}}\t{'filtered'}\n"
+                        return f"{port_:<{10}}\t{'Filtered'}\n"
 
                 return ""
 
