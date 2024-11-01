@@ -1,13 +1,9 @@
 from . import scanner
-from . import database
 from . import mainwindow
 from . import utils
-from . import config
-from . import main
 
-DB_PATH = "/src/scan_results.db"
 
-__doc__ = "Проект сканирования портов с использованием GTK и базы данных."
+__doc__ = "Проект сканирования портов с использованием GTK."
 
 
 class MainWindow(mainwindow.MainWindow):

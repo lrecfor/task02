@@ -1,145 +1,149 @@
-from scapy.layers.inet import IP, TCP, ICMP
-from utils import ScanErrorException
-from scapy.all import *
-from concurrent.futures import ThreadPoolExecutor
-import time
+"""Module providing scanner functions."""
+
 import socket
+import time
+from concurrent.futures import ThreadPoolExecutor
+import re
+
+import requests
+import scapy
+import socks
+from scapy.layers.inet import IP, TCP, ICMP
+
+from config import MAX_WORKERS, TIMEOUT, SOCKS_IP, SOCKS_PORT
+from src.utils import ScanErrorException, GetIpByDomainNameErrorException, IP_PATTERN
 
 
 class Scanner:
+    """Parent class for PortScanner class."""
+
+    def __init__(self, host, ports):
+        self.host = host
+        self.ports = ports
 
     @staticmethod
-    def get_domain_name(ip_address):
+    def get_ip_by_domain_name(domain_name):
+        """
+        Returns the IP address by domain
+
+        :param domain_name: domain name to get ip address for.
+        """
         try:
-            hostname = socket.gethostbyaddr(ip_address)[0]
-            return hostname
-        except socket.herror:
-            return "No domain name found"
+            ip_address = socket.gethostbyname(domain_name)
+            return ip_address
+        except Exception as error:
+            raise GetIpByDomainNameErrorException(error) from error
 
-    @staticmethod
-    def scan(host, ports_, func):
+    def scan(self, func):
         """
         Scanning ports by execute func with ThreadPoolExecutor.
 
-        :param host: host ip or domain name to scan
-        :param ports_: list of ports to scan
-        :param func: function to execute with ThreadPoolExecutor
+        :func: function to execute with ThreadPoolExecutor
         :return: list of strings with result of scanning
         """
         try:
             start_time = time.time()
             text_list = []
-            with ThreadPoolExecutor(max_workers=15) as executor:
-                for port in ports_:
-                    text_list.append(executor.submit(func, host, port))
+            with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+                for port in self.ports:
+                    text_list.append(executor.submit(func, self.host, port))
             end_time = time.time()
 
             print(f"Программа выполнилась за {end_time - start_time} секунд")
             return "".join([t.result() for t in text_list])
-        except Exception as e:
-            raise ScanErrorException(e)
+        except Exception as error_text:
+            raise ScanErrorException(error_text) from error_text
 
-    def ack_scan(self, host, ports_):
-        """
-        Scan ports using ack packets by call scan() function.
 
-        :param host: host ip or domain name to scan
-        :param ports_: list of ports to scan
-        :return: list of strings with result of scanning
-        """
-        try:
-            socket.inet_aton(host)
-        except socket.error:
-            host = self.get_domain_name(host)
-        try:
-            def ack_scan_(host_, port_):
-                packet_ = IP(dst=host_) / TCP(dport=port_, flags="A")
-                response = sr1(packet_, verbose=0, timeout=10)
+class PortScanner(Scanner):
+    """Class for port scanning."""
 
-                if response is None:
+    def __init__(self, host, ports, flags):
+        super().__init__(host, ports)
+        self.flags = flags
+
+    def port_scan(self):
+        """Scanning ports by call scan() function with port_scan_() func as argument."""
+
+        def port_scan_(host_, port_):
+            """
+            Scanning port. Sends a packet with the flag defined in self.flag.
+            If port is open, then return "Open" string.
+            If port is filtered, then return "Filtered" string.
+            If the port was not accurately determined to be open or closed,
+            returns "Open|Filtered" string.
+
+            :return: string with result of scanning
+            """
+            socks.setdefaultproxy(socks.PROXY_TYPE_SOCKS5, SOCKS_IP, SOCKS_PORT)
+            socket.socket = socks.socksocket
+
+            packet_ = IP(dst=host_) / TCP(dport=port_, flags=self.flags)
+            response = scapy.layers.inet.sr1(packet_, verbose=0, timeout=TIMEOUT)
+
+            if response is None:
+                if self.flags in ('A', 'S'):
+                    return f"{port_:<{10}}\t\t{'Filtered'}\n"
+                if self.flags in ('F', ''):
+                    return f"{port_:<{10}}\t\t{'Open|Filtered'}\n"
+
+            if response:
+                if (response.haslayer(TCP) and (
+                        self.flags == "A" and response.getlayer(TCP).flags == 0x4) or (
+                        response.getlayer(TCP).flags == 0x14)):
+                    return ""
+                if response.haslayer(TCP) and self.flags == "S" and response.getlayer(
+                        TCP).flags == 0x12:
+                    return f"{port_:<{10}}\t\t{'Open'}\n"
+                if (response.haslayer(ICMP) and response.getlayer(ICMP).type == 3 and
+                        int(response.getlayer(ICMP).code) in [1, 2, 3, 9, 10, 13]):
                     return f"{port_:<{10}}\t\t{'Filtered'}\n"
 
-                elif response.haslayer(TCP):
-                    if response.getlayer(TCP).flags == 0x4:
-                        return ""  # f"{port_:<{10}}\t\t{'unfiltered'}\n"
-                    elif response.getlayer(TCP).flags == 0x14:
-                        return ""
-                elif response.haslayer(ICMP):
-                    if (int(response.getlayer(ICMP).type) == 3 and
-                            int(response.getlayer(ICMP).code) in [1, 2, 3, 9, 10, 13]):
-                        return f"{port_:<{10}}\t{'Filtered'}\n"
+            return ""
 
-                return ""
-
-            return self.scan(host, ports_, ack_scan_)
-        except Exception as e:
-            raise ScanErrorException(e)
-
-    def fin_scan(self, host, ports_):
-        """
-        Scan ports using fin packets by call scan() function.
-
-        :param host: host ip or domain name to scan
-        :param ports_: list of ports to scan
-        :return: list of strings with result of scanning
-        """
         try:
-            socket.inet_aton(host)
-        except socket.error:
-            host = self.get_domain_name(host)
+            if re.match(IP_PATTERN, self.host) is None:
+                self.host = self.get_ip_by_domain_name(self.host)
+        except GetIpByDomainNameErrorException as error_text:
+            raise ScanErrorException(error_text) from error_text
+
         try:
-            def fin_scan_(host_, port_):
-                packet_ = IP(dst=host_) / TCP(dport=port_, flags="F")
-                response = sr1(packet_, verbose=0, timeout=10)
+            return self.scan(port_scan_)
+        except Exception as error_text:
+            raise ScanErrorException(error_text) from error_text
 
-                if response is None:
-                    return f"{port_:<10}\t\tOpen/Filtered\n"
 
-                elif response:
-                    if response.haslayer(TCP) and response.getlayer(TCP).flags == 0x14:
-                        return ""
-                    elif (response.haslayer(ICMP) and response.getlayer(ICMP).type == 3 and
-                          int(response.getlayer(ICMP).code) in [1, 2, 3, 9, 10, 13]):
-                        return f"{port_:<10}\t\tFiltered\n"
+class ACKScanner(PortScanner):
+    """
+    Class for ack scanning. Scan ports using ack packets.
+    """
 
-                return ""
+    def __init__(self, host, ports):
+        super().__init__(host, ports, "A")
 
-            return self.scan(host, ports_, fin_scan_)
-        except Exception as e:
-            raise ScanErrorException(e)
 
-    def syn_scan(self, host, ports_):
-        """
-        Scan ports using syn packets by call scan() function.
+class FINScanner(PortScanner):
+    """
+    Class for fin scanning. Scan ports using fin packets.
+    """
 
-        :param host: host ip or domain name to scan
-        :param ports_: list of ports to scan
-        :return: list of strings with result of scanning
-        """
-        try:
-            socket.inet_aton(host)
-        except socket.error:
-            host = self.get_domain_name(host)
-        try:
-            def syn_scan_(host_, port_):
-                packet_ = IP(dst=host_) / TCP(dport=port_, flags="S")
-                response = sr1(packet_, verbose=0, timeout=10)
+    def __init__(self, host, ports):
+        super().__init__(host, ports, "F")
 
-                if response is None:
-                    return f"{port_:<{10}}\t\t{'Filtered'}\n"
 
-                elif response.haslayer(TCP):
-                    if response.getlayer(TCP).flags == 0x12:
-                        return f"{port_:<{10}}\t\t{'open'}\n"
-                    elif response.getlayer(TCP).flags == 0x14:
-                        return ""
-                elif response.haslayer(ICMP):
-                    if (int(response.getlayer(ICMP).type) == 3 and
-                            int(response.getlayer(ICMP).code) in [1, 2, 3, 9, 10, 13]):
-                        return f"{port_:<{10}}\t{'Filtered'}\n"
+class NULLScanner(PortScanner):
+    """
+    Class for null scanning. Scan ports using no packets.
+    """
 
-                return ""
+    def __init__(self, host, ports):
+        super().__init__(host, ports, "")
 
-            return self.scan(host, ports_, syn_scan_)
-        except Exception as e:
-            raise ScanErrorException(e)
+
+class SYNScanner(PortScanner):
+    """
+    Class for syn scanning. Scan ports using syn packets.
+    """
+
+    def __init__(self, host, ports):
+        super().__init__(host, ports, "S")

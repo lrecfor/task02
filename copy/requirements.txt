@@ -1,6 +1,0 @@
-scapy==2.5.0
-SQLAlchemy==2.0.20
-PyGObject==3.46.0
-SQLAlchemy==2.0.20
-pycairo==1.25.0
-typing-extensions==4.8.0
